@@ -7,66 +7,30 @@ import { env } from "./util/env";
 import { z } from "zod";
 import { inferable } from "./inferable";
 
+const serviceSchema = z.object({
+  start: z.function(),
+  stop: z.function(),
+  definition: z.object({
+    name: z.string(),
+  }),
+});
+
+const integrationSchema = z.object({
+  type: z.literal("inferable-integration"),
+  name: z.string(),
+  version: z.string(),
+  initialize: z.function().returns(z.promise(serviceSchema)),
+  setup: z.function().returns(z.promise(z.void())),
+  teardown: z.function().returns(z.promise(z.void())),
+});
+
+
 async function main() {
   const start = new Date();
 
   logger.info("Discovering services...");
 
-  const files = fs
-    .readdirSync(path.join(__dirname, "services"))
-    .filter(
-      (filename) =>
-        filename.endsWith(".service.ts") || filename.endsWith(".service.js"),
-    )
-    .map((filename) => require(path.join(__dirname, "services", filename)));
-
-  const nonServices = fs
-    .readdirSync(path.join(__dirname, "services"))
-    .filter((filename) => !filename.endsWith(".service.ts"));
-
-  if (nonServices.length > 0) {
-    logger.warn(
-      "Found non-service files in services directory. These will not be loaded.",
-      {
-        files: nonServices,
-      },
-    );
-  }
-
-  const serviceSchema = z.object({
-    start: z.function(),
-    stop: z.function(),
-    definition: z.object({
-      name: z.string(),
-    }),
-  });
-
-  const services = files
-    .map((f) => Object.values(f))
-    .flat()
-    .map((m: unknown) => {
-      const parsed = serviceSchema.safeParse(m);
-
-      if (parsed.success) {
-        logger.info("Found service", {
-          name: parsed.data.definition.name,
-        });
-
-        return parsed.data;
-      }
-
-      return null;
-    })
-    .map((i) => i!);
-
-  const integrationSchema = z.object({
-    type: z.literal("inferable-integration"),
-    name: z.string(),
-    version: z.string(),
-    initialize: z.function().returns(z.promise(serviceSchema)),
-    setup: z.function().returns(z.promise(z.void())),
-    teardown: z.function().returns(z.promise(z.void())),
-  });
+  const services = loadLocalServices()
 
   const integrations = Object.keys(
     require("../package.json").dependencies ?? [],
@@ -183,3 +147,50 @@ process.on("uncaughtException", (error) => {
 
   process.exit(1);
 });
+
+function loadLocalServices(): RegisteredService[] {
+  if (!fs.existsSync(path.join(__dirname, "services"))) {
+    logger.info("No services directory found, skipping local service discovery");
+    return [];
+  }
+
+  const files = fs
+    .readdirSync(path.join(__dirname, "services"))
+    .filter(
+      (filename) =>
+        filename.endsWith(".service.ts") || filename.endsWith(".service.js"),
+    )
+    .map((filename) => require(path.join(__dirname, "services", filename)));
+
+  const nonServices = fs
+    .readdirSync(path.join(__dirname, "services"))
+    .filter((filename) => !filename.endsWith(".service.ts"));
+
+  if (nonServices.length > 0) {
+    logger.warn(
+      "Found non-service files in services directory. These will not be loaded.",
+      {
+        files: nonServices,
+      },
+    );
+  }
+
+  return files
+    .map((f) => Object.values(f))
+    .flat()
+    .map((m: unknown) => {
+      const parsed = serviceSchema.safeParse(m);
+
+      if (parsed.success) {
+        logger.info("Found service", {
+          name: parsed.data.definition.name,
+        });
+
+        return parsed.data;
+      }
+
+      return null;
+    })
+    .map((i) => i!);
+}
+
