@@ -1,0 +1,24 @@
+{
+  "name": "@inferable/proxy",
+  "version": "0.0.1",
+  "description": "A self-hosted proxy that bridges internal systems and Inferable",
+  "main": "src/index.ts",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "dev": "tsx -r dotenv/config src/index.ts",
+    "test": "exit 0",
+    "test:setup": "jest src --runInBand --setupFiles dotenv/config"
+  },
+  "author": "Inferable",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@inferable/monitor": "^0.0.6",
+    "inferable": "^0.5.0",
+    "tsx": "^4.16.2",
+    "winston": "^3.13.1",
+    "zod": "^3.23.8"
+  }
+}
