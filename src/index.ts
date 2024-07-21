@@ -82,7 +82,7 @@ async function main() {
   logger.info("Starting services complete!", {
     services: startables.map((s, i) => ({
       ...s.definition,
-      status: settled[i].status,
+      ...settled[i],
     })),
   });
 
@@ -162,6 +162,7 @@ function loadLocalServices(): RegisteredService[] {
     )
     .map((filename) => require(path.join(__dirname, "services", filename)));
 
+
   const nonServices = fs
     .readdirSync(path.join(__dirname, "services"))
     .filter((filename) => !filename.endsWith(".service.ts"));
@@ -191,6 +192,7 @@ function loadLocalServices(): RegisteredService[] {
 
       return null;
     })
-    .map((i) => i!);
+    .map((i) => i!)
+    .filter(Boolean);
 }
 
