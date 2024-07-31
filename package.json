@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@inferable/monitor": "^0.0.6",
+    "dotenv": "^16.4.5",
     "inferable": "^0.5.0",
     "tsx": "^4.16.2",
     "winston": "^3.13.1",
