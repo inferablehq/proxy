@@ -20,20 +20,17 @@ const integrationSchema = z.object({
   name: z.string(),
   version: z.string(),
   initialize: z.function().returns(z.promise(serviceSchema)),
-  setup: z.function().returns(z.promise(z.void())),
-  teardown: z.function().returns(z.promise(z.void())),
 });
-
 
 async function main() {
   const start = new Date();
 
   logger.info("Discovering services...");
 
-  const services = loadLocalServices()
+  const services = loadLocalServices();
 
   const integrations = Object.keys(
-    require("../package.json").dependencies ?? [],
+    require("../package.json").dependencies ?? []
   )
     .filter((k) => k.startsWith("@inferable/"))
     .map((k) => {
@@ -55,7 +52,7 @@ async function main() {
             name: k,
             version: l.version,
             errors: parsed.error.issues,
-          },
+          }
         );
 
         return null;
@@ -70,13 +67,13 @@ async function main() {
   });
 
   const integrationServices = await Promise.all(
-    integrations.map((i) => i.setup().then(() => i.initialize(inferable))),
+    integrations.map((i) => i.initialize(inferable))
   );
 
   const startables = [...services, ...integrationServices];
 
   const settled = await Promise.allSettled(
-    startables.map((service) => service.start()),
+    startables.map((service) => service.start())
   );
 
   logger.info("Starting services complete!", {
@@ -115,7 +112,7 @@ main().then(({ services, start }) => {
             status: "ok",
             pid: process.pid,
             services: services.map((s) => s.definition),
-          }),
+          })
         );
 
         return;
@@ -148,9 +145,11 @@ process.on("uncaughtException", (error) => {
   process.exit(1);
 });
 
-function loadLocalServices(): RegisteredService[] {
+function loadLocalServices() {
   if (!fs.existsSync(path.join(__dirname, "services"))) {
-    logger.info("No services directory found, skipping local service discovery");
+    logger.info(
+      "No services directory found, skipping local service discovery"
+    );
     return [];
   }
 
@@ -158,10 +157,9 @@ function loadLocalServices(): RegisteredService[] {
     .readdirSync(path.join(__dirname, "services"))
     .filter(
       (filename) =>
-        filename.endsWith(".service.ts") || filename.endsWith(".service.js"),
+        filename.endsWith(".service.ts") || filename.endsWith(".service.js")
     )
     .map((filename) => require(path.join(__dirname, "services", filename)));
-
 
   const nonServices = fs
     .readdirSync(path.join(__dirname, "services"))
@@ -172,7 +170,7 @@ function loadLocalServices(): RegisteredService[] {
       "Found non-service files in services directory. These will not be loaded.",
       {
         files: nonServices,
-      },
+      }
     );
   }
 
@@ -195,4 +193,3 @@ function loadLocalServices(): RegisteredService[] {
     .map((i) => i!)
     .filter(Boolean);
 }
-
