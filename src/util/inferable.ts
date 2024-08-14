@@ -1,6 +1,6 @@
 import { Inferable } from "inferable";
-import { env } from "./util/env";
-import { logger } from "./util/logger";
+import { env } from "./env";
+import { logger } from "./logger";
 
 logger.info("Inferable SDK initializing...", {
   environment: env.NODE_ENV,

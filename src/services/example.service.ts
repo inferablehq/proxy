@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { inferable } from "../inferable";
+import { inferable } from "../util/inferable";
 
 const inventory = [
   {
