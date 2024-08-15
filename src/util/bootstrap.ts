@@ -71,15 +71,10 @@ export async function bootstrap() {
 
   const startables = [...services, ...integrationServices];
 
-  const settled = await Promise.allSettled(
-    startables.map((service) => service.start())
-  );
+  await Promise.all(startables.map((service) => service.start()));
 
   logger.info("Starting services complete!", {
-    services: startables.map((s, i) => ({
-      ...s.definition,
-      ...settled[i],
-    })),
+    services: startables.map((s) => s.definition),
   });
 
   process.on("SIGTERM", async () => {
