@@ -6,7 +6,10 @@ import { env } from "./env";
 import { z } from "zod";
 import { inferable } from "./inferable";
 
-const serviceSchema = z.object({
+const DEFAULT_SERVICE_PATH = path.join(__dirname, '..', 'services');
+
+// Already registered service exported via Inferable.service(....)
+const registeredServiceSchema = z.object({
   start: z.function(),
   stop: z.function(),
   definition: z.object({
@@ -14,19 +17,40 @@ const serviceSchema = z.object({
   }),
 });
 
+// Service definition only
+const unregisteredServiceSchema = z.object({
+  name: z.string(),
+  functions: z.array(z.any()),
+});
+
 const integrationSchema = z.object({
   type: z.literal("inferable-integration"),
   name: z.string(),
   version: z.string(),
-  initialize: z.function().returns(z.promise(serviceSchema)),
+  initialize: z.function().returns(z.promise(registeredServiceSchema)),
 });
+
+type LocalService  = {
+  status: 'registered',
+  service: z.infer<typeof registeredServiceSchema>,
+} | {
+  status: 'unregistered',
+  service: z.infer<typeof unregisteredServiceSchema>,
+}
 
 export async function bootstrap() {
   const start = new Date();
 
   logger.info("Discovering services...");
 
-  const services = loadLocalServices();
+  const services = loadLocalServices()
+  .map((s) => {
+    if (s.status === 'registered') {
+      return s.service;
+    }
+
+    return inferable.service(s.service);
+  })
 
   const integrations = Object.keys(
     require("../../package.json").dependencies ?? []
@@ -61,7 +85,7 @@ export async function bootstrap() {
     .map((i) => i!);
 
   logger.info("Starting services...", {
-    services: services.map((s) => s.definition),
+    services: services.map((s) => s.definition.name),
     integrations: integrations.map((i) => i.name),
   });
 
@@ -71,10 +95,15 @@ export async function bootstrap() {
 
   const startables = [...services, ...integrationServices];
 
-  await Promise.all(startables.map((service) => service.start()));
+  const settled = await Promise.allSettled(
+    startables.map((service) => service.start())
+  );
 
   logger.info("Starting services complete!", {
-    services: startables.map((s) => s.definition),
+    services: startables.map((s, i) => ({
+      name: s.definition.name,
+      ...settled[i],
+    })),
   });
 
   process.on("SIGTERM", async () => {
@@ -136,53 +165,60 @@ process.on("uncaughtException", (error) => {
   process.exit(1);
 });
 
-function loadLocalServices() {
-  if (!fs.existsSync(path.join(__dirname, "..", "services"))) {
-    logger.info(
-      "No services directory found, skipping local service discovery"
-    );
-    return [];
+const isServiceFile = (entry: fs.Dirent) => entry.isFile() && (entry.name.endsWith('.service.js') || entry.name.endsWith('.service.ts'));
+
+function loadLocalServices(dir: string = DEFAULT_SERVICE_PATH): LocalService[] {
+  if (!fs.existsSync(dir)) {
+    logger.info(`No services directory found at ${dir}, skipping local service discovery`);
+    return []
   }
 
-  const files = fs
-    .readdirSync(path.join(__dirname, "..", "services"))
-    .filter(
-      (filename) =>
-        filename.endsWith(".service.ts") || filename.endsWith(".service.js")
-    )
-    .map((filename) =>
-      require(path.join(__dirname, "..", "services", filename))
-    );
+  const entries = fs.readdirSync(dir, { withFileTypes: true });
 
-  const nonServices = fs
-    .readdirSync(path.join(__dirname, "..", "services"))
-    .filter((filename) => !filename.endsWith(".service.ts"));
+  const subDirectories = entries
+    .filter(entry => entry.isDirectory())
+    .map(entry => path.join(dir, entry.name));
 
-  if (nonServices.length > 0) {
-    logger.warn(
-      "Found non-service files in services directory. These will not be loaded.",
-      {
-        files: nonServices,
-      }
-    );
-  }
+  const subDirectoryServices = subDirectories.flatMap(subDir => loadLocalServices(subDir));
 
-  return files
-    .map((f) => Object.values(f))
-    .flat()
+  const serviceFiles = entries
+
+  .filter(isServiceFile)
+  .map(entry => require(path.join(dir, entry.name)));
+
+  const services = serviceFiles
+    .flatMap(f => Object.values(f))
     .map((m: unknown) => {
-      const parsed = serviceSchema.safeParse(m);
+      const registeredService = registeredServiceSchema.safeParse(m);
 
-      if (parsed.success) {
-        logger.info("Found service", {
-          name: parsed.data.definition.name,
+      if (registeredService.success) {
+        logger.info('Found registered service', {
+          name: registeredService.data.definition.name,
+          directory: dir
         });
 
-        return parsed.data;
+        return {
+          status: 'registered',
+          service: registeredService.data,
+        }
       }
 
+      const unregisteredService = unregisteredServiceSchema.safeParse(m);
+
+      if (unregisteredService.success) {
+        logger.info('Found unregistered service', {
+          name: unregisteredService.data.name,
+          directory: dir
+        });
+
+        return {
+          status: 'unregistered',
+          service: unregisteredService.data
+        }
+      }
       return null;
     })
-    .map((i) => i!)
-    .filter(Boolean);
+    .filter(Boolean) as LocalService[];
+
+  return [...services, ...subDirectoryServices];
 }
