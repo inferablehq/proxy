@@ -11,5 +11,5 @@ logger.info("Inferable SDK initializing...", {
 
 export const inferable = new Inferable({
   apiSecret: env.INFERABLE_API_SECRET,
-  endpoint: env.INFERABLE_API_ENDPOINT,
+  endpoint: env.INFERABLE_API_ENDPOINT ?? "https://api.inferable.ai",
 });

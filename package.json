@@ -7,8 +7,7 @@
     "start": "tsx src/index.ts",
     "dev": "tsx -r dotenv/config src/index.ts",
     "test": "exit 0",
-    "test:setup": "jest src --runInBand --setupFiles dotenv/config",
-    "playground": "node scripts/assisant-url.js | xargs open"
+    "test:setup": "jest src --runInBand --setupFiles dotenv/config"
   },
   "author": "Inferable",
   "license": "MIT",
